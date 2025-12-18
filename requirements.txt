@@ -1,0 +1,6 @@
+streamlit==1.37.0
+numpy==1.26.4
+opencv-python-headless==4.9.0.80
+mediapipe==0.10.14
+scipy==1.11.4
+imutils==0.5.4
