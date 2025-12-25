@@ -2,30 +2,57 @@ import streamlit as st
 import cv2
 import numpy as np
 import tempfile
-import pygame
+import os
 
-from predict_ml import predict_image, predict_video
-from detector import DrowsinessDetector
+# ===============================
+# FLAGS (VERY IMPORTANT)
+# ===============================
+ENABLE_WEBCAM = True      # Set False when running in Docker
+ENABLE_ALARM = True       # Set False in Docker / CI
 
-pygame.mixer.init()
-ALARM_ON = False
+# PATH SETUP
 
-def start_alarm():
-    global ALARM_ON
-    if not ALARM_ON:
-        pygame.mixer.music.load("assets/buzzer.mp3")
-        pygame.mixer.music.play(-1)  
-        ALARM_ON = True
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+ROOT_DIR = os.path.dirname(BASE_DIR)
 
-def stop_alarm():
-    global ALARM_ON
-    if ALARM_ON:
-        pygame.mixer.music.stop()
-        ALARM_ON = False
+MODEL_PATH = os.path.join(
+    ROOT_DIR, "models", "shape_predictor_68_face_landmarks.dat"
+)
 
+BUZZER_PATH = os.path.join(
+    ROOT_DIR, "assets", "buzzer.mp3"
+)
 
+# SAFE IMPORTS
 
-#fatigu score computation
+from src.predict_ml import predict_image, predict_video
+from src.detector import DrowsinessDetector
+
+# OPTIONAL AUDIO
+
+if ENABLE_ALARM:
+    import pygame
+    pygame.mixer.init()
+    ALARM_ON = False
+
+    def start_alarm():
+        global ALARM_ON
+        if not ALARM_ON:
+            pygame.mixer.music.load(BUZZER_PATH)
+            pygame.mixer.music.play(-1)
+            ALARM_ON = True
+
+    def stop_alarm():
+        global ALARM_ON
+        if ALARM_ON:
+            pygame.mixer.music.stop()
+            ALARM_ON = False
+else:
+    def start_alarm(): pass
+    def stop_alarm(): pass
+
+# FATIGUE SCORE
+
 def compute_fatigue_score(ear, mar):
     EAR_TH = 0.25
     MAR_TH = 0.75
@@ -36,8 +63,8 @@ def compute_fatigue_score(ear, mar):
     fatigue = (0.6 * eye_score + 0.4 * mouth_score) * 100
     return min(int(fatigue), 100)
 
+# STREAMLIT UI
 
-#streamlit configuration
 st.set_page_config(page_title="Drowsiness Detection", layout="centered")
 st.title("🚗 Driver Drowsiness Detection System")
 
@@ -51,7 +78,8 @@ mode = st.sidebar.selectbox(
     ]
 )
 
-# image upload prediction using ML
+# IMAGE UPLOAD
+
 if mode == "Image Upload (ML)":
     st.header("🖼️ Upload Driver Image")
 
@@ -64,22 +92,18 @@ if mode == "Image Upload (ML)":
         image_bytes = np.asarray(bytearray(uploaded_file.read()), dtype=np.uint8)
         image = cv2.imdecode(image_bytes, cv2.IMREAD_COLOR)
 
-        st.image(image, channels="BGR", caption="Uploaded Image")
+        st.image(image, channels="BGR")
 
         prediction, confidence = predict_image(image)
 
         if prediction is not None:
-            if prediction == 1:
-                st.subheader("😴 DROWSY")
-            else:
-                st.subheader("🙂 NOT DROWSY")
-
+            st.subheader("😴 DROWSY" if prediction == 1 else "🙂 NOT DROWSY")
             st.write(f"Confidence: {confidence*100:.2f}%")
         else:
-            st.warning("No face detected in the image.")
+            st.warning("No face detected.")
 
+# VIDEO UPLOAD
 
-# video upload prediction using ML
 elif mode == "Video Upload (ML)":
     st.header("🎞️ Upload Driver Video")
 
@@ -98,106 +122,56 @@ elif mode == "Video Upload (ML)":
             pred, ratio = predict_video(tfile.name)
 
         if pred is not None:
-            if pred == 1:
-                st.subheader("😴 DROWSY")
-            else:
-                st.subheader("🙂 NOT DROWSY")
-
+            st.subheader("😴 DROWSY" if pred == 1 else "🙂 NOT DROWSY")
             st.write(f"Drowsy frame ratio: {ratio*100:.2f}%")
         else:
-            st.warning("No face detected in video.")
+            st.warning("No face detected.")
 
+# WEBCAM (LOCAL ONLY)
 
-# live-webcam
 elif mode == "Live Webcam (Rule-based)":
-    st.header("📷 Live Driver Monitoring")
+    if not ENABLE_WEBCAM:
+        st.warning("Webcam disabled in this environment.")
+    else:
+        st.header("📷 Live Driver Monitoring")
+        start_btn = st.button("Start Webcam")
 
-    start = st.button("Start Webcam")
-    stop = st.button("Stop Webcam")
+        if start_btn:
+            detector = DrowsinessDetector(MODEL_PATH)
+            cap = cv2.VideoCapture(0)
 
-    if start:
-        detector = DrowsinessDetector(
-            "models/shape_predictor_68_face_landmarks.dat"
-        )
+            frame_slot = st.empty()
+            fatigue_slot = st.empty()
 
-        cap = cv2.VideoCapture(0)
-        frame_slot = st.empty()
-        fatigue_slot = st.empty()
+            while cap.isOpened():
+                ret, frame = cap.read()
+                if not ret:
+                    break
 
-        while cap.isOpened():
-            ret, frame = cap.read()
-            if not ret or stop:
-                break
+                ear, eye_alert, mar, yawn_alert = detector.process_frame(frame)
 
-            ear, eye_alert, mar, yawn_alert = detector.process_frame(frame)
+                if ear is not None:
+                    fatigue = compute_fatigue_score(ear, mar)
+                    fatigue_slot.progress(fatigue)
 
-            if ear is not None:
-                fatigue = compute_fatigue_score(ear, mar)
-
-                # SHOW ALERT 
-                if eye_alert or yawn_alert:
-                    cv2.putText(
-                        frame,
-                        "😴 DROWSY",
-                        (20, 40),
-                        cv2.FONT_HERSHEY_SIMPLEX,
-                        1,
-                        (0, 0, 255),
-                        3
-                    )
-
-                    cv2.putText(
-                        frame,
-                        f"Fatigue: {fatigue}%",
-                        (20, 80),
-                        cv2.FONT_HERSHEY_SIMPLEX,
-                        1,
-                        (0, 0, 255),
-                        2
-                    )
-
-                    st.subheader("😴 DROWSY")
-                    start_alarm()          
+                    if eye_alert or yawn_alert:
+                        start_alarm()
                 else:
-                    stop_alarm()           
+                    stop_alarm()
 
+                frame_slot.image(frame, channels="BGR")
 
-                    cv2.putText(
-                        frame,
-                        f"Fatigue: {fatigue}%",
-                        (20, 80),
-                        cv2.FONT_HERSHEY_SIMPLEX,
-                        1,
-                        (0, 0, 255),
-                        2
-                    )
+            cap.release()
+            stop_alarm()
 
-                    st.subheader("😴 DROWSY")
+# ABOUT
 
-                #shows fatigue
-                fatigue_slot.progress(fatigue)
-
-            frame_slot.image(frame, channels="BGR")
-        stop_alarm()
-
-        cap.release()
-
-
-#ABOUT
 elif mode == "About Project":
     st.markdown("""
     ### 🚗 Driver Drowsiness Detection System
 
-    **Features**
-    - Real-time rule-based detection (EAR + MAR)
-    - ML-based classification (RandomForest)
-    - Image & video upload support
-    - Fatigue score visualization
-
-    **Dataset**
-    - Trained on benchmark datasets (YawDD / NTHU)
-
-    **Architecture**
-    - Rule-based engine for live monitoring
-    - ML engine for offline image/video analysis
+    - Rule-based EAR + MAR
+    - ML classification
+    - Image & video support
+    - Docker & Windows friendly
     """)

@@ -1,9 +1,18 @@
 import cv2
 from src.utils import start_alarm, stop_alarm
 from src.detector import DrowsinessDetector
+import os
 
-predictor_path = "models/shape_predictor_68_face_landmarks.dat"
-detector = DrowsinessDetector(predictor_path)
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+ROOT_DIR = os.path.dirname(BASE_DIR)
+
+MODEL_PATH = os.path.join(
+    ROOT_DIR, "models", "shape_predictor_68_face_landmarks.dat"
+)
+
+BUZZER_PATH = os.path.join(
+    ROOT_DIR, "assets", "buzzer.mp3"
+)
 
 cap = cv2.VideoCapture(0)
 
