@@ -7,8 +7,6 @@ def eye_aspect_ratio(eye):
     C = dist.euclidean(eye[0],eye[3])
     ear =  (A + B) / (2.0 * C)
     return ear
-    
-from scipy.spatial import distance as dist
 
 def mouth_aspect_ratio(mouth):
     # vertical distances

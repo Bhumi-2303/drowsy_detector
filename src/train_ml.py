@@ -5,10 +5,27 @@ from sklearn.metrics import accuracy_score, classification_report
 import joblib
 import os
 
-DATA_PATH = "dataset/processed/features.csv"
-MODEL_PATH = "models/fatigue_classifier.pkl"
+# Path Setup
+
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+ROOT_DIR = os.path.dirname(BASE_DIR)
+
+DATA_PATH = os.path.join(
+    ROOT_DIR, "dataset", "processed", "features.csv"
+)
+
+MODEL_PATH = os.path.join(
+    ROOT_DIR, "models", "fatigue_classifier.pkl"
+)
+
+# Main
 
 def main():
+    if not os.path.exists(DATA_PATH):
+        raise FileNotFoundError(
+            f"Dataset not found. Run feature extraction first:\n{DATA_PATH}"
+        )
+
     # Load dataset
     df = pd.read_csv(DATA_PATH)
 
@@ -18,7 +35,11 @@ def main():
 
     # Train-test split
     X_train, X_test, y_train, y_test = train_test_split(
-        X, y, test_size=0.2, random_state=42, stratify=y
+        X,
+        y,
+        test_size=0.2,
+        random_state=42,
+        stratify=y
     )
 
     # Train model
@@ -35,7 +56,7 @@ def main():
     print(classification_report(y_test, y_pred))
 
     # Save model
-    os.makedirs("models", exist_ok=True)
+    os.makedirs(os.path.dirname(MODEL_PATH), exist_ok=True)
     joblib.dump(model, MODEL_PATH)
     print(f"✅ Model saved to {MODEL_PATH}")
 

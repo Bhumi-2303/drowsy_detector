@@ -1,15 +1,38 @@
 import cv2
 import dlib
 import joblib
+import os
 from imutils import face_utils
-from ratio import eye_aspect_ratio, mouth_aspect_ratio
+from src.ratio import eye_aspect_ratio, mouth_aspect_ratio
 
-MODEL_PATH = "models/fatigue_classifier.pkl"
-PREDICTOR_PATH = "models/shape_predictor_68_face_landmarks.dat"
+# Path Setup (CRITICAL)
+
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+ROOT_DIR = os.path.dirname(BASE_DIR)
+
+MODEL_PATH = os.path.join(
+    ROOT_DIR, "models", "fatigue_classifier.pkl"
+)
+
+PREDICTOR_PATH = os.path.join(
+    ROOT_DIR, "models", "shape_predictor_68_face_landmarks.dat"
+)
+
+# Safety Checks
+
+if not os.path.exists(MODEL_PATH):
+    raise FileNotFoundError(f"Model not found: {MODEL_PATH}")
+
+if not os.path.exists(PREDICTOR_PATH):
+    raise FileNotFoundError(f"Predictor not found: {PREDICTOR_PATH}")
+
+# Load Models
 
 detector = dlib.get_frontal_face_detector()
 predictor = dlib.shape_predictor(PREDICTOR_PATH)
 model = joblib.load(MODEL_PATH)
+
+# Image Prediction
 
 def predict_image(image):
     gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
@@ -23,16 +46,23 @@ def predict_image(image):
         right_eye = shape[36:42]
         mouth = shape[48:68]
 
-        ear = (eye_aspect_ratio(left_eye) +
-               eye_aspect_ratio(right_eye)) / 2.0
+        ear = (
+            eye_aspect_ratio(left_eye) +
+            eye_aspect_ratio(right_eye)
+        ) / 2.0
+
         mar = mouth_aspect_ratio(mouth)
 
-        prediction = model.predict([[ear, mar]])[0]
-        confidence = model.predict_proba([[ear, mar]])[0].max()
+        features = [[ear, mar]]
+
+        prediction = model.predict(features)[0]
+        confidence = model.predict_proba(features)[0].max()
 
         return prediction, confidence
 
     return None, None
+
+# Video Prediction
 
 def predict_video(video_path, frame_skip=5):
     cap = cv2.VideoCapture(video_path)
@@ -57,9 +87,7 @@ def predict_video(video_path, frame_skip=5):
     if not predictions:
         return None, None
 
-    # Majority vote
     drowsy_ratio = sum(predictions) / len(predictions)
     final_pred = 1 if drowsy_ratio > 0.5 else 0
 
     return final_pred, drowsy_ratio
-
