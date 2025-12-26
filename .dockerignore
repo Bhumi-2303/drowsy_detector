@@ -38,3 +38,43 @@ logs/
 build/
 dist/
 *.egg-info/
+# Python cache
+__pycache__/
+**/__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# Git
+.git/
+.gitignore
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDE / editor configs
+.vscode/
+.idea/
+
+# Local data & outputs (NOT needed in Docker image)
+output/
+logs/
+
+# Jupyter / experiments
+.ipynb_checkpoints/
+*.ipynb
+
+# Environment files
+.env
+.env.*
+
+# Build artifacts
+build/
+dist/
+*.egg-info/
