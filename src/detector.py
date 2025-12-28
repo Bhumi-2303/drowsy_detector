@@ -1,6 +1,7 @@
 import cv2
 import dlib
 import os
+import joblib
 from imutils import face_utils
 from src.ratio import eye_aspect_ratio, mouth_aspect_ratio
 
@@ -12,7 +13,7 @@ MAR_CONSEC_FRAMES = 15
 
 
 class DrowsinessDetector:
-    def __init__(self, predictor_path):
+    def __init__(self, predictor_path, ml_model_path=None):
         if not os.path.exists(predictor_path):
             raise FileNotFoundError(f"Predictor not found: {predictor_path}")
 
@@ -21,6 +22,11 @@ class DrowsinessDetector:
 
         self.counter = 0
         self.yawn_counter = 0
+        
+        self.ml_model = None
+        if ml_model_path:
+            self.ml_model = joblib.load(ml_model_path)
+
 
     def process_frame(self, frame):
         gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
@@ -57,3 +63,13 @@ class DrowsinessDetector:
             return ear, eye_alert, mar, yawn_alert
 
         return None, False, None, False
+
+    def predict_ml(self, ear, mar):
+        if self.ml_model is None:
+            return 0, 0.0
+
+        features = [[ear, mar]]
+        pred = self.ml_model.predict(features)[0]
+        conf = self.ml_model.predict_proba(features)[0].max()
+        return pred, conf
+
